@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import "./App.css";
 import ImageGrid from "./components/ImageGrid";
 import MoodButtons from "./components/MoodButtons";
@@ -9,6 +9,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const abortControllerRef = useRef(null);
+  const timeoutRef = useRef(null);
   const lastFetchRef = useRef(null);
 
   const MOODS = ["calm", "loud", "warm", "lonely", "bright"];
@@ -32,9 +33,13 @@ function App() {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
 
       // Create new abort controller for this request
       abortControllerRef.current = new AbortController();
+      const currentController = abortControllerRef.current;
       lastFetchRef.current = mood;
 
       setLoading(true);
@@ -49,7 +54,6 @@ function App() {
           `https://picsum.photos/400/300?random=${mood}${i}${Date.now()}`,
       );
 
-      // Picsum photos load directly, simulate brief loading for UX
       try {
         const fetchedImages = urls.map((url, i) => ({
           src: url,
@@ -57,9 +61,14 @@ function App() {
         }));
 
         // Simulate network delay to show skeleton loaders
-        setTimeout(() => {
+        timeoutRef.current = setTimeout(() => {
+          if (currentController.signal.aborted) {
+            return;
+          }
+
           setImages(fetchedImages);
           setLoading(false);
+          timeoutRef.current = null;
         }, 600);
       } catch (err) {
         if (err.name !== "AbortError") {
@@ -80,6 +89,17 @@ function App() {
       fetchImages(selectedMood);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="App">
